@@ -157,6 +157,10 @@ class CreditCardPresent(PayflowProObject):
     cvv2 = Field()
     tender = Field(default="C")
 
+class PayPalAccount(PayflowProObject):
+    email = Field()
+    tender = Field(default="P")
+
 class Amount(PayflowProObject):
     amt = Field(required=True)
     currency = Field()

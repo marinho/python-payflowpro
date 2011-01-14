@@ -58,13 +58,16 @@ class PayflowProClient(object):
     """
     URL_BASE_TEST = 'https://pilot-payflowpro.paypal.com'
     URL_BASE_LIVE = 'https://payflowpro.paypal.com'
+    URL_EXPRESS_CHECKOUT_TEST = 'https://www.sandbox.paypal.com/cgi-bin/webscr?cmd=_express-checkout&token=%(token)s'
+    URL_EXPRESS_CHECKOUT_LIVE = 'https://www.paypal.com/cgi-bin/webscr?cmd=_express-checkout&token=%(token)s'
     HOSTPORT = 443
     API_VERSION = '4'
     CLIENT_IDENTIFIER = 'python-payflowpro'
     MAX_RETRY_COUNT = 5 # How many times to retry failed logins or rate limited operations
     
     def __init__(self, partner, vendor, username, password, timeout_secs=45,
-        idgenerator=CurrentTimeIdGenerator(), url_base=URL_BASE_TEST):
+        idgenerator=CurrentTimeIdGenerator(), url_base=URL_BASE_TEST,
+        url_express_checkout_base=URL_EXPRESS_CHECKOUT_TEST):
         
         self.partner = partner
         self.vendor = vendor
@@ -74,6 +77,7 @@ class PayflowProClient(object):
         self.url_base = url_base
         self.idgenerator = idgenerator
         self.log = logging.getLogger('payflow_pro')
+        self.url_express_checkout_base = url_express_checkout_base
         
     def _build_parmlist(self, parameters):
         """
@@ -257,8 +261,47 @@ class PayflowProClient(object):
             params.update(item.data)
         return self._do_request(request_id, params)
 
-    ##### Implementations of recurring transactions #####
+    ##### Implementations of Express Checkout transactions #####
+    #
+    # 1. Set Express Checkout sets up the data about the transaction and controls
+    #    what is displayed to the buyer on the PayPal site when the buyer chooses
+    #    PayPal at checkout.
+    #
+    # 2. Get Express Checkout Details is an optional request enabling you to obtain
+    #    information about the transaction for display on your own website.
+    #
+    # 3. Do Express Checkout Payment performs the actual money transfer.
+
+    def set_express_checkout(self, account, amount, return_url, cancel_url=None,
+            tracking_number=None, request_id=None, extras=[]):
+        """
+        If approved, returns a URL for redirect user to PayPal website, to confirm
+        authorization for this transaction
+        """
+        params = dict(trxtype="S", action="S", returnurl=return_url,
+                cancelurl=cancel_url, custom=tracking_number)
+        for item in [account, amount] + extras:
+            params.update(item.data)
+        return self._do_request(request_id, params)
     
+    def get_express_checkout_details(self, token, request_id=None, extras=[]):
+        params = dict(trxtype="S", action="G", token=token)
+        for item in extras:
+            params.update(item.data)
+        return self._do_request(request_id, params)
+    
+    def do_express_checkout_payment(self, token, amount, payer_id, request_id=None,
+            extras=[]):
+        params = dict(trxtype="S", action="D", token=token)
+        for item in [amount, payer_id] + extras:
+            params.update(item.data)
+        return self._do_request(request_id, params)
+
+    def get_express_checkout_confirm_url(self, token):
+        return self.url_express_checkout_base % {'token': token}
+    
+    ##### Implementations of recurring transactions #####
+     
     def profile_add(self, profile, credit_card, amount, request_id=None, extras=[]):
         params = dict(trxtype = 'R', action = 'A')
         for item in [profile, credit_card, amount] + extras:
